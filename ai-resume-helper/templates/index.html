@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 定制简历助手</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Marked.js -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 打字机光标效果 */
+        .typing-cursor::after {
+            content: '|';
+            animation: blink 1s infinite;
+            color: #6366f1;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* Toast 动画 */
+        .toast-enter {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+
+        .toast-leave {
+            animation: slideOut 0.3s ease-in forwards;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateY(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+        }
+
+        /* Markdown 渲染样式 */
+        .markdown-body h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+            color: #1e40af;
+            border-bottom: 2px solid #e0e7ff;
+            padding-bottom: 0.5rem;
+        }
+
+        .markdown-body h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1.25rem;
+            margin-bottom: 0.75rem;
+            color: #3730a3;
+        }
+
+        .markdown-body p {
+            line-height: 1.8;
+            margin-bottom: 1rem;
+            color: #334155;
+        }
+
+        .markdown-body ul, .markdown-body ol {
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .markdown-body li {
+            line-height: 1.8;
+            margin-bottom: 0.5rem;
+            color: #334155;
+        }
+
+        .markdown-body strong {
+            color: #1e293b;
+            font-weight: 600;
+        }
+
+        /* 文件拖拽区域 */
+        .drop-zone.dragover {
+            border-color: #6366f1;
+            background-color: #eef2ff;
+        }
+
+        /* 滚动条美化 */
+        .result-area::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .result-area::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 3px;
+        }
+
+        .result-area::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+
+        .result-area::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* 加载动画 */
+        .loading-dots span {
+            animation: loadingDots 1.4s infinite both;
+        }
+
+        .loading-dots span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .loading-dots span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes loadingDots {
+            0%, 80%, 100% {
+                opacity: 0;
+            }
+            40% {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+    <!-- Toast 容器 -->
+    <div id="toast-container" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50"></div>
+
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- 标题区域 -->
+        <header class="text-center mb-10">
+            <h1 class="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 mb-3">
+                <i class="fas fa-magic mr-3"></i>AI 定制简历助手
+            </h1>
+            <p class="text-slate-500 text-lg">上传简历，输入职位描述，AI 帮你精准优化</p>
+        </header>
+
+        <!-- 主内容区域 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- 左侧：操作区 -->
+            <div class="bg-white rounded-2xl shadow-xl p-6">
+                <h2 class="text-xl font-semibold text-slate-700 mb-6">
+                    <i class="fas fa-edit text-indigo-500 mr-2"></i>简历优化配置
+                </h2>
+
+                <!-- 文件上传区 -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-slate-600 mb-2">
+                        <i class="fas fa-file-upload text-blue-500 mr-1"></i>上传简历
+                    </label>
+                    <div id="drop-zone" class="drop-zone border-2 border-dashed border-slate-300 rounded-xl p-8 text-center cursor-pointer transition-all duration-200 hover:border-indigo-400 hover:bg-indigo-50/30">
+                        <input type="file" id="file-input" accept=".pdf,.docx" class="hidden">
+                        <i class="fas fa-cloud-upload-alt text-4xl text-slate-400 mb-3"></i>
+                        <p class="text-slate-500" id="file-hint">拖拽文件到此处，或点击选择</p>
+                        <p class="text-xs text-slate-400 mt-2">支持 PDF、DOCX 格式</p>
+                    </div>
+                </div>
+
+                <!-- JD 文本框 -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-slate-600 mb-2">
+                        <i class="fas fa-briefcase text-green-500 mr-1"></i>目标职位描述 (JD)
+                    </label>
+                    <textarea
+                        id="jd-text"
+                        rows="6"
+                        placeholder="请粘贴目标职位的描述内容..."
+                        class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none transition-all duration-200 resize-none text-slate-600 placeholder-slate-400"
+                    ></textarea>
+                </div>
+
+                <!-- 模型参数 -->
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-2">
+                            <i class="fas fa-robot text-purple-500 mr-1"></i>模型选择
+                        </label>
+                        <select
+                            id="model-select"
+                            class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none transition-all duration-200 text-slate-600 bg-white cursor-pointer"
+                        >
+                            <option value="glm-4">GLM-4 (智谱)</option>
+                            <option value="glm-4-flash">GLM-4-Flash (智谱)</option>
+                            <option value="deepseek-chat">DeepSeek Chat</option>
+                            <option value="gpt-4o">GPT-4o</option>
+                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-2">
+                            <i class="fas fa-temperature-half text-orange-500 mr-1"></i>创意度
+                        </label>
+                        <div class="flex items-center">
+                            <input
+                                type="range"
+                                id="temperature"
+                                min="0"
+                                max="1"
+                                step="0.1"
+                                value="0.7"
+                                class="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                            >
+                            <span id="temp-value" class="ml-3 text-sm font-medium text-slate-600 w-8">0.7</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 提交按钮 -->
+                <button
+                    id="submit-btn"
+                    class="w-full py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-xl shadow-lg hover:scale-[1.02] hover:shadow-xl active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                >
+                    <i class="fas fa-rocket mr-2"></i>
+                    <span id="btn-text">开始优化</span>
+                </button>
+            </div>
+
+            <!-- 右侧：结果区 -->
+            <div class="bg-white rounded-2xl shadow-xl p-6 flex flex-col">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-xl font-semibold text-slate-700">
+                        <i class="fas fa-sparkles text-yellow-500 mr-2"></i>优化结果
+                    </h2>
+                    <button
+                        id="copy-btn"
+                        class="hidden px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-all duration-200 text-sm font-medium"
+                    >
+                        <i class="fas fa-copy mr-1"></i>一键复制
+                    </button>
+                </div>
+
+                <!-- 结果展示区 -->
+                <div
+                    id="result-area"
+                    class="result-area flex-1 min-h-[400px] max-h-[600px] overflow-y-auto px-4 py-3 bg-slate-50 rounded-xl border border-slate-100"
+                >
+                    <!-- 空状态 -->
+                    <div id="empty-state" class="h-full flex flex-col items-center justify-center text-slate-400">
+                        <i class="fas fa-file-alt text-6xl mb-4"></i>
+                        <p>上传简历并填写 JD 后，点击"开始优化"</p>
+                        <p class="text-sm mt-2">AI 将为您生成个性化简历优化建议</p>
+                    </div>
+
+                    <!-- 加载状态 -->
+                    <div id="loading-state" class="hidden h-full flex flex-col items-center justify-center text-slate-500">
+                        <div class="w-16 h-16 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
+                        <p>AI 正在分析您的简历</p>
+                        <p class="loading-dots mt-2">
+                            <span>.</span><span>.</span><span>.</span>
+                        </p>
+                    </div>
+
+                    <!-- 结果内容 -->
+                    <div id="result-content" class="hidden markdown-body"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 页脚 -->
+        <footer class="text-center mt-10 text-slate-400 text-sm">
+            <p>Powered by AI · 让每一份简历都闪闪发光 ✨</p>
+        </footer>
+    </div>
+
+    <script>
+        // DOM 元素
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const fileHint = document.getElementById('file-hint');
+        const jdText = document.getElementById('jd-text');
+        const modelSelect = document.getElementById('model-select');
+        const temperatureInput = document.getElementById('temperature');
+        const tempValue = document.getElementById('temp-value');
+        const submitBtn = document.getElementById('submit-btn');
+        const btnText = document.getElementById('btn-text');
+        const copyBtn = document.getElementById('copy-btn');
+        const resultArea = document.getElementById('result-area');
+        const emptyState = document.getElementById('empty-state');
+        const loadingState = document.getElementById('loading-state');
+        const resultContent = document.getElementById('result-content');
+        const toastContainer = document.getElementById('toast-container');
+
+        let selectedFile = null;
+        let isGenerating = false;
+        let fullResult = '';
+
+        // 配置 Marked.js
+        marked.setOptions({
+            breaks: true,
+            gfm: true
+        });
+
+        // 显示 Toast 提示
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+            const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+
+            toast.className = `toast-enter ${bgColor} text-white px-6 py-3 rounded-xl shadow-lg flex items-center space-x-2`;
+            toast.innerHTML = `
+                <i class="fas ${icon}"></i>
+                <span>${message}</span>
+            `;
+
+            toastContainer.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-leave');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        // 文件拖拽处理
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            const ext = file.name.split('.').pop().toLowerCase();
+
+            if (!['pdf', 'docx'].includes(ext)) {
+                showToast('仅支持 PDF 和 DOCX 格式', 'error');
+                return;
+            }
+
+            selectedFile = file;
+            fileHint.innerHTML = `<span class="text-indigo-600 font-medium"><i class="fas fa-file-alt mr-1"></i>${file.name}</span>`;
+            dropZone.classList.add('border-indigo-400', 'bg-indigo-50/30');
+        }
+
+        // 温度滑块
+        temperatureInput.addEventListener('input', (e) => {
+            tempValue.textContent = e.target.value;
+        });
+
+        // 提交表单
+        submitBtn.addEventListener('click', async () => {
+            if (isGenerating) return;
+
+            // 验证
+            if (!selectedFile) {
+                showToast('请上传简历文件', 'error');
+                return;
+            }
+
+            if (!jdText.value.trim()) {
+                showToast('请输入目标职位描述', 'error');
+                return;
+            }
+
+            // 开始生成
+            startGeneration();
+        });
+
+        async function startGeneration() {
+            isGenerating = true;
+            fullResult = '';
+
+            // 更新 UI 状态
+            submitBtn.disabled = true;
+            btnText.textContent = '生成中...';
+            copyBtn.classList.add('hidden');
+
+            emptyState.classList.add('hidden');
+            resultContent.classList.add('hidden');
+            loadingState.classList.remove('hidden');
+
+            // 构建 FormData
+            const formData = new FormData();
+            formData.append('resume_file', selectedFile);
+            formData.append('jd_text', jdText.value.trim());
+            formData.append('model', modelSelect.value);
+            formData.append('temperature', temperatureInput.value);
+
+            try {
+                const response = await fetch('/api/optimize_resume', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || '请求失败');
+                }
+
+                // 隐藏加载状态，显示结果
+                loadingState.classList.add('hidden');
+                resultContent.classList.remove('hidden');
+                resultContent.innerHTML = '';
+                resultContent.classList.add('typing-cursor');
+
+                // 读取流式响应
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const dataStr = line.slice(6);
+
+                            if (dataStr === '[DONE]') {
+                                finishGeneration();
+                                return;
+                            }
+
+                            try {
+                                const data = JSON.parse(dataStr);
+
+                                if (data.error) {
+                                    throw new Error(data.error);
+                                }
+
+                                if (data.content) {
+                                    fullResult += data.content;
+                                    // 实时渲染 Markdown
+                                    resultContent.innerHTML = marked.parse(fullResult);
+                                    // 滚动到底部
+                                    resultArea.scrollTop = resultArea.scrollHeight;
+                                }
+                            } catch (e) {
+                                if (e.message && !e.message.includes('JSON')) {
+                                    throw e;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                finishGeneration();
+
+            } catch (error) {
+                showToast(error.message || '生成失败，请重试', 'error');
+                resetGeneration();
+            }
+        }
+
+        function finishGeneration() {
+            isGenerating = false;
+            submitBtn.disabled = false;
+            btnText.textContent = '重新优化';
+            resultContent.classList.remove('typing-cursor');
+            copyBtn.classList.remove('hidden');
+            showToast('简历优化完成！', 'success');
+        }
+
+        function resetGeneration() {
+            isGenerating = false;
+            submitBtn.disabled = false;
+            btnText.textContent = '开始优化';
+            loadingState.classList.add('hidden');
+            emptyState.classList.remove('hidden');
+        }
+
+        // 一键复制
+        copyBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(fullResult);
+                showToast('复制成功！', 'success');
+            } catch (e) {
+                showToast('复制失败，请手动复制', 'error');
+            }
+        });
+    </script>
+</body>
+</html>
